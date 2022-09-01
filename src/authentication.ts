@@ -44,5 +44,5 @@ export const authentication = {
     scope: '*',
     autoRefresh: true,
   },
-  connectionLabel: 'Taskade {{handle}}',
+  connectionLabel: '{{handle}}',
 };
