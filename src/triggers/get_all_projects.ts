@@ -77,40 +77,40 @@ const perform = async (z: ZObject, bundle: Bundle) => {
           spaceID: bundle.inputData.space_id,
           filterby: { archived: false, templated: false },
           first: 20,
-          after: null,
+          after: bundle.meta.page !== 0 ? `${bundle.meta.page * 20}` : null,
           orderby: [
             { sort: 'pinned_at', direction: 'desc' },
             { sort: 'updated_at', direction: 'desc' },
           ],
         },
         query: `
-      query SpaceDocuments(
-        $spaceID: ID
-        $orderby: [DocumentOrdering]
-        $filterby: DocumentFiltering
-        $first: Int
-        $after: String
-      ) {
-        membership(space_id: $spaceID) {
-          id
-          space {
+        query SpaceDocuments(
+          $spaceID: ID
+          $orderby: [DocumentOrdering]
+          $filterby: DocumentFiltering
+          $first: Int
+          $after: String
+        ) {
+          membership(space_id: $spaceID) {
             id
-            documents_v2(
-              first: $first
-              after: $after
-              orderby: $orderby
-              filterby: $filterby
-            ) {
-              edges {
-                node {
-                  id
-                  info
+            space {
+              id
+              documents_v2(
+                first: $first
+                after: $after
+                orderby: $orderby
+                filterby: $filterby
+              ) {
+                edges {
+                  node {
+                    id
+                    info
+                  }
                 }
               }
             }
           }
         }
-      }
       `,
       },
     };
@@ -148,6 +148,7 @@ export default {
       { key: 'id', label: 'ID' },
       { key: 'title', label: 'Title' },
     ],
+    canPaginate: true,
   },
   key: 'get_all_projects',
   noun: 'Projects',
