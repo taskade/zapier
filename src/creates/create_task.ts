@@ -1,4 +1,4 @@
-import { ZObject, HttpRequestOptions, Bundle } from 'zapier-platform-core';
+import { Bundle, HttpRequestOptions, ZObject } from 'zapier-platform-core';
 
 const perform = async (z: ZObject, bundle: Bundle) => {
   const options: HttpRequestOptions = {

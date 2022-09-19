@@ -1,4 +1,4 @@
-import { ZObject, HttpRequestOptions, Bundle } from 'zapier-platform-core';
+import { Bundle, HttpRequestOptions, ZObject } from 'zapier-platform-core';
 
 interface Document {
   id: string;
@@ -53,10 +53,7 @@ const perform = async (z: ZObject, bundle: Bundle) => {
     },
   };
 
-  if (
-    bundle.inputData.space_id === null ||
-    bundle.inputData.space_id === undefined
-  ) {
+  if (bundle.inputData.space_id == null || bundle.inputData.space_id === undefined) {
     return z.request('https://www.taskade.com/graphql', sharedWithMeRequest).then((response) => {
       const results = response.json;
       const projects = results.data.recentProjects.edges.map((e: DocumentEdge) => ({
@@ -123,9 +120,10 @@ const perform = async (z: ZObject, bundle: Bundle) => {
 
       // You can do any parsing you need for results here before returning them
 
-      const projects = results.data.membership.space.documents_v2.edges.map(
-        (e:DocumentEdge) => ({ id: e.node?.id, title: e.node?.info.title })
-      );
+      const projects = results.data.membership.space.documents_v2.edges.map((e: DocumentEdge) => ({
+        id: e.node?.id,
+        title: e.node?.info.title,
+      }));
       return [...projects];
     });
   }

@@ -1,4 +1,4 @@
-import { ZObject, HttpRequestOptions, Bundle } from 'zapier-platform-core';
+import { Bundle, HttpRequestOptions, ZObject } from 'zapier-platform-core';
 
 const perform = async (z: ZObject, bundle: Bundle) => {
   const payload = {
@@ -30,21 +30,19 @@ const performList = async (z: ZObject, bundle: Bundle) => {
       Authorization: `Bearer ${bundle.authData.access_token}`,
     },
     params: {
-      spaceId:
-        bundle.inputData.space_id !== null ? bundle.inputData.space_id : null,
-      projectId:
-        bundle.inputData.project_id !== null
-          ? bundle.inputData.project_id
-          : null,
+      spaceId: bundle.inputData.space_id != null ? bundle.inputData.space_id : null,
+      projectId: bundle.inputData.project_id != null ? bundle.inputData.project_id : null,
     },
   };
 
-  return z.request('https://www.taskade.com/webhooks/zapier/taskdue/performlist', options).then((response) => {
-    response.throwForStatus();
-    const results = response.json;
+  return z
+    .request('https://www.taskade.com/webhooks/zapier/taskdue/performlist', options)
+    .then((response) => {
+      response.throwForStatus();
+      const results = response.json;
 
-    return results.results;
-  });
+      return results.results;
+    });
 };
 
 const performSubscribe = async (z: ZObject, bundle: Bundle) => {
@@ -60,23 +58,21 @@ const performSubscribe = async (z: ZObject, bundle: Bundle) => {
     body: {
       hookUrl: bundle.targetUrl,
       triggerType: 'TaskDue',
-      spaceId:
-        bundle.inputData.space_id !== null ? bundle.inputData.space_id : null,
-      projectId:
-        bundle.inputData.project_id !== null
-          ? bundle.inputData.project_id
-          : null,
+      spaceId: bundle.inputData.space_id != null ? bundle.inputData.space_id : null,
+      projectId: bundle.inputData.project_id != null ? bundle.inputData.project_id : null,
     },
   };
 
-  return z.request('https://www.taskade.com/webhooks/zapier/subscribe', options).then((response) => {
-    response.throwForStatus();
-    const results = response.json;
+  return z
+    .request('https://www.taskade.com/webhooks/zapier/subscribe', options)
+    .then((response) => {
+      response.throwForStatus();
+      const results = response.json;
 
-    // You can do any parsing you need for results here before returning them
+      // You can do any parsing you need for results here before returning them
 
-    return results;
-  });
+      return results;
+    });
 };
 
 const performUnsubscribe = async (z: ZObject, bundle: Bundle) => {

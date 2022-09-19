@@ -1,4 +1,4 @@
-import { ZObject, HttpRequestOptions, Bundle } from 'zapier-platform-core';
+import { Bundle, HttpRequestOptions, ZObject } from 'zapier-platform-core';
 
 // FIXME any
 interface Membership {
@@ -37,7 +37,7 @@ const perform = async (z: ZObject, bundle: Bundle) => {
   const firstResponseJSON = firstResponse.json;
 
   const spaceIds = firstResponseJSON.data.memberships.edges.map(
-    (e: MembershipEdge) => e.node.space.id
+    (e: MembershipEdge) => e.node.space.id,
   );
 
   const spaces = firstResponseJSON.data.memberships.edges.map((e: MembershipEdge) => ({
@@ -116,8 +116,7 @@ const perform = async (z: ZObject, bundle: Bundle) => {
 
     const folders = results.data.memberships.edges.map((e: MembershipEdge) => ({
       id: e.node.space.id,
-      name:
-        e.node.space.parent_membership.space.name + ' > ' + e.node.space.name,
+      name: e.node.space.parent_membership.space.name + ' > ' + e.node.space.name,
       parent_id: e.node.space.parent_membership.space.id,
     }));
 
