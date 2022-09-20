@@ -22,16 +22,31 @@ const perform = async (z: ZObject, bundle: Bundle) => {
       variables: {
         projectId: bundle.inputData.project_id,
       },
-      query: `query BlocksQuery($projectId: ID!) {document(id: $projectId) {id contents __typename }}`,
+      query: `
+      query BlocksQuery($projectId: ID!) {
+        document(id: $projectId) {
+          id
+          contents
+        }
+      }
+      `,
     },
-    raw: true,
   };
 
-  return z.request('https://www.taskade.com/graphql', options).then((response) => {
-    response.throwForStatus();
-    const results = response.json;
+  const response = await z.request('https://www.taskade.com/graphql', options);
+  const data = response.json;
 
-    const nodes: { format: any } = results.data.document.contents.nodes;
+  if (data.errors && data.errors.length) {
+    const error = data.errors[0];
+    throw new z.errors.Error(
+      (error.extensions && error.extensions.userPresentableMessage) || error.message,
+      'invalid_input',
+      400,
+    );
+  }
+
+  const nodes: { format: any } = data.data?.document?.contents?.nodes;
+  if (nodes != null) {
     const blocks = [];
     for (const [id, node] of Object.entries(nodes)) {
       if (node.format?.node === 'h1' || node.format?.node === 'h2') {
@@ -40,7 +55,10 @@ const perform = async (z: ZObject, bundle: Bundle) => {
     }
 
     return blocks;
-  });
+  } else {
+    const error = data.errors ? data.errors[0].message : 'Something went wrong';
+    throw new z.errors.Error(`Failed to get all blocks`, error, 400);
+  }
 };
 
 export default {
