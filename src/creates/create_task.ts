@@ -1,8 +1,70 @@
+import { DateDuration, MomentHelpers } from '@taskade/readymade-datetime';
+import moment from 'moment-timezone';
+import { v4 as uuidv4 } from 'uuid';
 import { Bundle, HttpRequestOptions, ZObject } from 'zapier-platform-core';
 
+interface Zap {
+  user: {
+    timezone: string;
+  };
+}
+
+function isZap(zap: any): zap is Zap {
+  return typeof zap === 'object' && 'user' in zap && typeof zap.user === 'object';
+}
+
+const nodeDueDateReqVariables = (z: ZObject, bundle: Bundle, nodeId: string) => {
+  const variables = {
+    input: {
+      clientMutationId: uuidv4(),
+      dateAttachment: {},
+      nodeIds: [nodeId],
+      projectId: bundle.inputData.project_id,
+    },
+  };
+
+  let zapierProfileTimezone = 'Etc/UTC';
+  if (isZap(bundle.meta.zap)) {
+    zapierProfileTimezone = bundle.meta.zap.user.timezone;
+  }
+
+  let dateDuration: DateDuration;
+  if (bundle.inputData.start_date != null && bundle.inputData.end_date == null) {
+    dateDuration = DateDuration.fromDateRangeDesc({
+      start: MomentHelpers.toDateTimeDesc(
+        moment.tz(bundle.inputData.start_date, zapierProfileTimezone),
+      ),
+    });
+
+    variables.input.dateAttachment = dateDuration.toDateRangeDesc();
+  } else if (bundle.inputData.start_date != null && bundle.inputData.end_date != null) {
+    dateDuration = DateDuration.fromDateRangeDesc({
+      start: MomentHelpers.toDateTimeDesc(
+        moment.tz(bundle.inputData.start_date, zapierProfileTimezone),
+      ),
+      end: MomentHelpers.toDateTimeDesc(
+        moment.tz(bundle.inputData.end_date, zapierProfileTimezone),
+      ),
+    });
+    variables.input.dateAttachment = dateDuration.toDateRangeDesc();
+  } else if (bundle.inputData.start_date == null && bundle.inputData.end_date != null) {
+    dateDuration = DateDuration.fromDateRangeDesc({
+      start: MomentHelpers.toDateTimeDesc(
+        moment.tz(bundle.inputData.end_date, zapierProfileTimezone),
+      ),
+    });
+    variables.input.dateAttachment = dateDuration.toDateRangeDesc();
+  } else {
+    return null;
+  }
+
+  variables.input.dateAttachment = dateDuration.toDateRangeDesc();
+  return variables;
+};
+
 const perform = async (z: ZObject, bundle: Bundle) => {
-  const options: HttpRequestOptions = {
-    url: 'https:///www.taskade.com/graphql',
+  const nodeImportReqOpts: HttpRequestOptions = {
+    url: 'https://www.taskade.com/graphql',
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -13,7 +75,7 @@ const perform = async (z: ZObject, bundle: Bundle) => {
       operationName: 'ProjectNodesImportMutation',
       variables: {
         input: {
-          clientMutationId: 'zapier-clientMutationId',
+          clientMutationId: uuidv4(),
           documentID: bundle.inputData.project_id,
           nodeID: bundle.inputData.block_id || null,
           placement: 'BOTTOM',
@@ -36,17 +98,76 @@ const perform = async (z: ZObject, bundle: Bundle) => {
           },
         },
       },
-      query:
-        'mutation ProjectNodesImportMutation($input: ProjectNodesImportInput\u0021) { projectNodesImport(input: $input) { clientMutationId nodeID document { id info } }}',
+      query: `
+      mutation ProjectNodesImportMutation($input: ProjectNodesImportInput!) {
+        projectNodesImport(input: $input) {
+          clientMutationId
+          nodeID
+          document {
+            id
+            info
+          }
+        }
+      }
+      `,
+    },
+  };
+  const nodeImportRes = await z.request('https://www.taskade.com/graphql', nodeImportReqOpts);
+  const nodeImportData = nodeImportRes.json;
+
+  if (bundle.inputData.start_date == null && bundle.inputData.end_date == null) {
+    return nodeImportData;
+  }
+
+  const variables = nodeDueDateReqVariables(
+    z,
+    bundle,
+    nodeImportData.data.projectNodesImport.nodeID,
+  );
+  if (variables == null) {
+    return nodeImportData;
+  }
+
+  const nodeDueDateReqOpts: HttpRequestOptions = {
+    url: 'https://www.taskade.com/graphql',
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      authorization: `bearer ${bundle.authData.access_token}`,
+    },
+    body: {
+      operationName: 'ProjectNodesDueDateUpdateMutation',
+      variables,
+      query: `
+      mutation ProjectNodesDueDateUpdateMutation($input: ProjectNodesDueDateUpdateInput!) {
+        projectNodesDueDateUpdate(input: $input) {
+          clientMutationId
+          ok
+        }
+      }
+      `,
     },
   };
 
-  return z.request('https:///www.taskade.com/graphql', options).then((response) => {
-    response.throwForStatus();
-    const results = response.json;
+  const nodeDueDateRes = await z.request('https://www.taskade.com/graphql', nodeDueDateReqOpts);
+  const nodeDueDateData = nodeDueDateRes.json;
+  if (nodeDueDateData.errors && nodeDueDateData.errors.length) {
+    const error = nodeDueDateData.errors[0];
+    throw new z.errors.Error(
+      (error.extensions && error.extensions.userPresentableMessage) || error.message,
+      'invalid_input',
+      400,
+    );
+  }
 
-    return results;
-  });
+  if (nodeDueDateData.data.projectNodesDueDateUpdate.ok) {
+    nodeImportData.data.projectNodesImport.node = {
+      ...variables.input.dateAttachment,
+    };
+  }
+
+  return nodeImportData;
 };
 
 export default {
@@ -93,6 +214,24 @@ export default {
         type: 'string',
         helpText: 'The content of the task.',
         required: true,
+        list: false,
+        altersDynamicFields: false,
+      },
+      {
+        key: 'start_date',
+        label: 'Start Date',
+        type: 'datetime',
+        helpText: 'The start date of the task.',
+        required: false,
+        list: false,
+        altersDynamicFields: false,
+      },
+      {
+        key: 'end_date',
+        label: 'End Date',
+        type: 'datetime',
+        helpText: 'The end date of the task.',
+        required: false,
         list: false,
         altersDynamicFields: false,
       },
