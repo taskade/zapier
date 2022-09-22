@@ -1,7 +1,10 @@
 export const authentication = {
   type: 'oauth2',
   test: {
-    headers: { authorization: 'bearer {{bundle.authData.access_token}}' },
+    headers: {
+      accept: 'application/json',
+      authorization: 'bearer {{bundle.authData.access_token}}',
+    },
     url: 'https://www.taskade.com/oauth2/ping',
   },
   oauth2Config: {
