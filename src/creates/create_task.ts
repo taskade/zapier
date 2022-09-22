@@ -9,8 +9,8 @@ interface Zap {
   };
 }
 
-function isZap(zap: { id: string } | undefined | Zap): zap is Zap {
-  return (zap as Zap).user != null;
+function isZap(zap: any): zap is Zap {
+  return typeof zap === 'object' && 'user' in zap && typeof zap.user === 'object';
 }
 
 const nodeDueDateReqVariables = (z: ZObject, bundle: Bundle, nodeId: string) => {
@@ -28,7 +28,7 @@ const nodeDueDateReqVariables = (z: ZObject, bundle: Bundle, nodeId: string) => 
     zapierProfileTimezone = bundle.meta.zap.user.timezone;
   }
 
-  let dateDuration: DateDuration | null = null;
+  let dateDuration: DateDuration;
   if (bundle.inputData.start_date != null && bundle.inputData.end_date == null) {
     dateDuration = DateDuration.fromDateRangeDesc({
       start: MomentHelpers.toDateTimeDesc(
@@ -37,9 +37,7 @@ const nodeDueDateReqVariables = (z: ZObject, bundle: Bundle, nodeId: string) => 
     });
 
     variables.input.dateAttachment = dateDuration.toDateRangeDesc();
-  }
-
-  if (bundle.inputData.start_date != null && bundle.inputData.end_date != null) {
+  } else if (bundle.inputData.start_date != null && bundle.inputData.end_date != null) {
     dateDuration = DateDuration.fromDateRangeDesc({
       start: MomentHelpers.toDateTimeDesc(
         moment.tz(bundle.inputData.start_date, zapierProfileTimezone),
@@ -49,18 +47,14 @@ const nodeDueDateReqVariables = (z: ZObject, bundle: Bundle, nodeId: string) => 
       ),
     });
     variables.input.dateAttachment = dateDuration.toDateRangeDesc();
-  }
-
-  if (bundle.inputData.start_date == null && bundle.inputData.end_date != null) {
+  } else if (bundle.inputData.start_date == null && bundle.inputData.end_date != null) {
     dateDuration = DateDuration.fromDateRangeDesc({
       start: MomentHelpers.toDateTimeDesc(
         moment.tz(bundle.inputData.end_date, zapierProfileTimezone),
       ),
     });
     variables.input.dateAttachment = dateDuration.toDateRangeDesc();
-  }
-
-  if (dateDuration == null) {
+  } else {
     return null;
   }
 
@@ -130,7 +124,7 @@ const perform = async (z: ZObject, bundle: Bundle) => {
     bundle,
     nodeImportData.data.projectNodesImport.nodeID,
   );
-  if (variables == null || Object.keys(variables.input.dateAttachment).length === 0) {
+  if (variables == null) {
     return nodeImportData;
   }
 
