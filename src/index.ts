@@ -3,7 +3,7 @@ import 'cross-fetch/polyfill';
 import { version as platformVersion } from 'zapier-platform-core';
 
 import { authentication } from './authentication';
-import CreateTask from './creates/create_task';
+import CreateTask from './creates/createTask';
 import GetAllBlocks from './triggers/get_all_blocks';
 import GetAllProjects from './triggers/get_all_projects';
 import GetAllSpaces from './triggers/get_all_spaces';
