@@ -130,6 +130,13 @@ const perform = async (z: ZObject, bundle: Bundle) => {
     });
   } catch (error) {
     if (error instanceof ApolloError) {
+      if (
+        error.networkError != null &&
+        'statusCode' in error.networkError &&
+        error.networkError.statusCode === 401
+      ) {
+        throw new z.errors.RefreshAuthError();
+      }
       throw new z.errors.Error(error.message, 'invalid_input', 400);
     }
   }
@@ -171,6 +178,13 @@ const perform = async (z: ZObject, bundle: Bundle) => {
       }
     } catch (error) {
       if (error instanceof ApolloError) {
+        if (
+          error.networkError != null &&
+          'statusCode' in error.networkError &&
+          error.networkError.statusCode === 401
+        ) {
+          throw new z.errors.RefreshAuthError();
+        }
         throw new z.errors.Error(error.message, 'invalid_input', 400);
       }
     }
@@ -208,6 +222,13 @@ const perform = async (z: ZObject, bundle: Bundle) => {
       }
     } catch (error) {
       if (error instanceof ApolloError) {
+        if (
+          error.networkError != null &&
+          'statusCode' in error.networkError &&
+          error.networkError.statusCode === 401
+        ) {
+          throw new z.errors.RefreshAuthError();
+        }
         throw new z.errors.Error(error.message, 'invalid_input', 400);
       }
     }
