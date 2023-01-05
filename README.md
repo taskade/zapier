@@ -1,6 +1,6 @@
 # zapier
 Zapier app
 
-TODO: Document development process and release cycle
-
-Current Documentation: Ask YC :D
+### Bump version
+1. Update version in package.json
+2. `zapier push`
