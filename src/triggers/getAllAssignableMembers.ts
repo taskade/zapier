@@ -1,119 +1,43 @@
-import { ApolloClient, createHttpLink, gql, InMemoryCache } from '@apollo/client/core';
-import { setContext } from '@apollo/client/link/context';
-import isEmpty from 'lodash/isEmpty';
-import uniqBy from 'lodash/uniqBy';
 import { Bundle, ZObject } from 'zapier-platform-core';
 
-interface User {
-  id: string;
-  handle: string;
-  display_name: string;
-}
-
-interface Membership {
-  id: string;
-  user: User;
-}
-
 interface ProjectMember {
-  id: string;
-  user: User;
+  handle: string;
+  displayName: string;
 }
 
-interface ProjectMemberEdge {
-  cursor: string;
-  node: ProjectMember | null | undefined;
+interface ProjectMembersResponseOk {
+  ok: true;
+  items: ProjectMember[];
 }
+
+interface ProjectMembersResponseError {
+  ok: false;
+  message: string;
+}
+
+type ProjectMembersResponse = ProjectMembersResponseOk | ProjectMembersResponseError;
 
 const perform = async (z: ZObject, bundle: Bundle) => {
-  const httpLink = createHttpLink({
-    uri: 'https://www.taskade.com/graphql',
-  });
-
-  const authLink = setContext((_, { headers }) => {
-    return {
-      headers: {
-        ...headers,
-        authorization: bundle.authData.access_token ? `Bearer ${bundle.authData.access_token}` : '',
-      },
-    };
-  });
-
-  const client = new ApolloClient({
-    name: 'zapier',
-    link: authLink.concat(httpLink),
-    cache: new InMemoryCache(),
-  });
-
-  const result = await client.query({
-    query: gql`
-      query ProjectMentionablesQuery($projectId: ID!, $projectMembersLimit: Int = null) {
-        document(id: $projectId) {
-          id
-          members(first: $projectMembersLimit) {
-            edges {
-              node {
-                id
-                user {
-                  id
-                  handle
-                  display_name
-                }
-              }
-            }
-          }
-          space {
-            id
-            memberships {
-              id
-              user {
-                id
-                handle
-                display_name
-              }
-            }
-          }
-        }
-      }
-    `,
-    variables: {
-      projectId: bundle.inputData.project_id,
+  const response = await z.request({
+    url: `https://www.taskade.com/api/v1/projects/${bundle.inputData.project_id}/members`,
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      'content-type': 'application/json',
+      authorization: `Bearer ${bundle.authData.access_token}`,
     },
   });
 
-  const { data } = result;
+  const data: ProjectMembersResponse = response.json;
 
-  if (data == null) {
-    return [];
+  if (!data.ok) {
+    throw new z.errors.Error(data.message, 'invalid_input', 400);
   }
 
-  const { space, members } = data.document;
-
-  const results = [];
-
-  const allSpaceMembers =
-    space?.memberships?.map((member: Membership) => {
-      return member.user ?? null;
-    }) ?? [];
-
-  const allDocumentMembers =
-    members?.edges?.map((edge: ProjectMemberEdge) => {
-      return edge.node?.user ?? null;
-    }) ?? [];
-
-  const allMembers = uniqBy(
-    [...allSpaceMembers, ...allDocumentMembers],
-    (member: User) => member?.id,
-  );
-  for (const member of allMembers) {
-    if (member != null) {
-      results.push({
-        id: member.id,
-        displayName: isEmpty(member.display_name) ? member.handle : member.display_name,
-      });
-    }
-  }
-  return results;
+  return data.items.map((i) => ({
+    id: i.handle,
+    displayName: i.displayName,
+  }));
 };
 
 export default {
@@ -132,7 +56,7 @@ export default {
     ],
     sample: { id: '1', displayName: 'xiao ming' },
     outputFields: [
-      { key: 'id', label: 'ID' },
+      { key: 'id', label: 'Handle' },
       { key: 'displayName', label: 'Display Name' },
     ],
   },
@@ -142,6 +66,5 @@ export default {
     label: 'Get All Assignable Members',
     description: 'List all assignable members from a project.',
     hidden: true,
-    important: false,
   },
 };

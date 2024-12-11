@@ -159,6 +159,5 @@ export default {
     label: 'Task Due',
     description: 'Triggers when a task is due.',
     hidden: false,
-    important: true,
   },
 };
