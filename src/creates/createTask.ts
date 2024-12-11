@@ -1,8 +1,4 @@
-import { ApolloClient, ApolloError, createHttpLink, gql, InMemoryCache } from '@apollo/client/core';
-import { setContext } from '@apollo/client/link/context';
-import { DateDuration, MomentHelpers } from '@taskade/readymade-datetime';
 import moment from 'moment-timezone';
-import { v4 as uuidv4 } from 'uuid';
 import { Bundle, ZObject } from 'zapier-platform-core';
 
 interface Zap {
@@ -11,230 +7,196 @@ interface Zap {
   };
 }
 
+interface DateRange {
+  start: {
+    date: string;
+    time: string;
+    timezone: string;
+  };
+  end?: {
+    date: string;
+    time: string;
+    timezone: string;
+  };
+}
+
+interface Task {
+  id: string;
+}
+
+interface CreateTaskInput {
+  taskId?: string;
+  contentType: string;
+  content: string;
+  placement: string;
+}
+
+interface CreateTasksResponseOk {
+  ok: true;
+  item: Task[];
+}
+
+interface CreateTasksResponseError {
+  ok: false;
+  message: string;
+}
+
+type CreateTasksResponse = CreateTasksResponseOk | CreateTasksResponseError;
+
+interface CreateDateResponseOk {
+  ok: true;
+  item: Task;
+}
+
+interface CreateDateResponseError {
+  ok: false;
+  message: string;
+}
+
+type CreateDateResponse = CreateDateResponseOk | CreateDateResponseError;
+
+interface CreateAssigneeResponseOk {
+  ok: true;
+  item: Task;
+}
+
+interface CreateAssigneeResponseError {
+  ok: false;
+  message: string;
+}
+
+type CreateAssigneeResponse = CreateAssigneeResponseOk | CreateAssigneeResponseError;
+
 function isZap(zap: any): zap is Zap {
   return typeof zap === 'object' && 'user' in zap && typeof zap.user === 'object';
 }
 
-const nodeDueDateReqVariables = (z: ZObject, bundle: Bundle, nodeId: string) => {
-  const variables = {
-    input: {
-      clientMutationId: uuidv4(),
-      dateAttachment: {},
-      nodeIds: [nodeId],
-      projectId: bundle.inputData.project_id,
-    },
-  };
-
+const taskDueDateReqVariables = (z: ZObject, bundle: Bundle) => {
   let zapierProfileTimezone = 'Etc/UTC';
   if (isZap(bundle.meta.zap)) {
     zapierProfileTimezone = bundle.meta.zap.user.timezone;
   }
 
-  let dateDuration: DateDuration;
-  if (bundle.inputData.start_date != null && bundle.inputData.end_date == null) {
-    dateDuration = DateDuration.fromDateRangeDesc({
-      start: MomentHelpers.toDateTimeDesc(
-        moment.tz(bundle.inputData.start_date, zapierProfileTimezone),
-      ),
-    });
+  let date: DateRange | null = null;
 
-    variables.input.dateAttachment = dateDuration.toDateRangeDesc();
+  if (bundle.inputData.start_date != null && bundle.inputData.end_date == null) {
+    const startMoment = moment.tz(bundle.inputData.start_date, zapierProfileTimezone);
+    date = {
+      start: {
+        date: startMoment.format('YYYY-MM-DD'),
+        time: startMoment.format('HH:mm:ss'),
+        timezone: zapierProfileTimezone,
+      },
+    };
   } else if (bundle.inputData.start_date != null && bundle.inputData.end_date != null) {
-    dateDuration = DateDuration.fromDateRangeDesc({
-      start: MomentHelpers.toDateTimeDesc(
-        moment.tz(bundle.inputData.start_date, zapierProfileTimezone),
-      ),
-      end: MomentHelpers.toDateTimeDesc(
-        moment.tz(bundle.inputData.end_date, zapierProfileTimezone),
-      ),
-    });
-    variables.input.dateAttachment = dateDuration.toDateRangeDesc();
+    const startMoment = moment.tz(bundle.inputData.start_date, zapierProfileTimezone);
+    date = {
+      start: {
+        date: startMoment.format('YYYY-MM-DD'),
+        time: startMoment.format('HH:mm:ss'),
+        timezone: zapierProfileTimezone,
+      },
+    };
+    const endMoment = moment.tz(bundle.inputData.end_date, zapierProfileTimezone);
+    date.end = {
+      date: endMoment.format('YYYY-MM-DD'),
+      time: endMoment.format('HH:mm:ss'),
+      timezone: zapierProfileTimezone,
+    };
   } else if (bundle.inputData.start_date == null && bundle.inputData.end_date != null) {
-    dateDuration = DateDuration.fromDateRangeDesc({
-      start: MomentHelpers.toDateTimeDesc(
-        moment.tz(bundle.inputData.end_date, zapierProfileTimezone),
-      ),
-    });
-    variables.input.dateAttachment = dateDuration.toDateRangeDesc();
+    const startMoment = moment.tz(bundle.inputData.end_date, zapierProfileTimezone);
+    date = {
+      start: {
+        date: startMoment.format('YYYY-MM-DD'),
+        time: startMoment.format('HH:mm:ss'),
+        timezone: zapierProfileTimezone,
+      },
+    };
   } else {
     return null;
   }
 
-  variables.input.dateAttachment = dateDuration.toDateRangeDesc();
-  return variables;
+  return date;
 };
 
 const perform = async (z: ZObject, bundle: Bundle) => {
-  const httpLink = createHttpLink({
-    uri: 'https://www.taskade.com/graphql',
-  });
-
-  const authLink = setContext((_, { headers }) => {
-    return {
-      headers: {
-        ...headers,
-        authorization: bundle.authData.access_token ? `Bearer ${bundle.authData.access_token}` : '',
-      },
+  let task: CreateTaskInput = {
+    contentType: 'text/markdown',
+    content: bundle.inputData.content,
+    placement: 'beforeend',
+  };
+  if (bundle.inputData.block_id != null) {
+    task = {
+      taskId: bundle.inputData.block_id,
+      contentType: 'text/markdown',
+      content: bundle.inputData.content,
+      placement: 'beforeend',
     };
-  });
-
-  const client = new ApolloClient({
-    name: 'zapier',
-    link: authLink.concat(httpLink),
-    cache: new InMemoryCache({
-      addTypename: false,
+  }
+  const createTaskResponse = await z.request({
+    url: `https://www.taskade.com/api/v1/projects/${bundle.inputData.project_id}/tasks`,
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'content-type': 'application/json',
+      authorization: `Bearer ${bundle.authData.access_token}`,
+    },
+    body: JSON.stringify({
+      tasks: [task],
     }),
   });
 
-  // Create node
-  let nodeImportResult;
-  try {
-    nodeImportResult = await client.mutate({
-      mutation: gql`
-        mutation ProjectNodesImportMutation($input: ProjectNodesImportInput!) {
-          projectNodesImport(input: $input) {
-            clientMutationId
-            nodeID
-            document {
-              id
-              info
-            }
-          }
-        }
-      `,
-      variables: {
-        input: {
-          clientMutationId: uuidv4(),
-          documentID: bundle.inputData.project_id,
-          nodeID: bundle.inputData.block_id || null,
-          placement: 'BOTTOM',
-          type: 'application/vnd.taskade.taskast',
-          content: {
-            type: 'fragment',
-            children: [
-              {
-                type: 'text',
-                text: {
-                  ops: [
-                    { insert: bundle.inputData.content },
-                    { insert: '\n', attributes: { paragraph: true } },
-                  ],
-                },
-                children: [],
-                format: { node: 'checkbox' },
-              },
-            ],
-          },
-        },
+  const createTaskData: CreateTasksResponse = createTaskResponse.json;
+
+  if (!createTaskData.ok) {
+    throw new z.errors.Error(createTaskData.message, 'invalid_input', 400);
+  }
+
+  const taskId = createTaskData.item[0]?.id ?? null;
+  if (taskId == null) {
+    throw new z.errors.Error('Missing task ID', 'invalid_input', 400);
+  }
+
+  const dateAddon = taskDueDateReqVariables(z, bundle);
+  if (dateAddon != null) {
+    const createDateResponse = await z.request({
+      url: `https://www.taskade.com/api/v1/projects/${bundle.inputData.project_id}/tasks/${taskId}/date`,
+      method: 'PUT',
+      headers: {
+        Accept: 'application/json',
+        'content-type': 'application/json',
+        authorization: `Bearer ${bundle.authData.access_token}`,
       },
+      body: JSON.stringify(dateAddon),
     });
-  } catch (error) {
-    if (error instanceof ApolloError) {
-      if (
-        error.networkError != null &&
-        'statusCode' in error.networkError &&
-        error.networkError.statusCode === 401
-      ) {
-        throw new z.errors.RefreshAuthError();
-      }
-      throw new z.errors.Error(error.message, 'invalid_input', 400);
+
+    const createDateData: CreateDateResponse = createDateResponse.json;
+
+    if (!createDateData.ok) {
+      throw new z.errors.Error(createDateData.message, 'invalid_input', 400);
     }
   }
 
-  if (nodeImportResult == null) {
-    throw new z.errors.Error('Internal Server Error');
-  }
-
-  const nodeImportData = nodeImportResult.data.projectNodesImport;
-
-  if (
-    bundle.inputData.start_date == null &&
-    bundle.inputData.end_date == null &&
-    bundle.inputData.member_id == null
-  ) {
-    return nodeImportData;
-  }
-
-  // Create due date addon
-  const dateAddonVariables = nodeDueDateReqVariables(z, bundle, nodeImportData.nodeID);
-  if (dateAddonVariables != null) {
-    try {
-      const dateAddonResult = await client.mutate({
-        mutation: gql`
-          mutation ProjectNodesDueDateUpdateMutation($input: ProjectNodesDueDateUpdateInput!) {
-            projectNodesDueDateUpdate(input: $input) {
-              clientMutationId
-              ok
-            }
-          }
-        `,
-        variables: dateAddonVariables,
-      });
-
-      if (dateAddonResult.data.projectNodesDueDateUpdate.ok) {
-        nodeImportData.node = {
-          ...dateAddonVariables.input.dateAttachment,
-        };
-      }
-    } catch (error) {
-      if (error instanceof ApolloError) {
-        if (
-          error.networkError != null &&
-          'statusCode' in error.networkError &&
-          error.networkError.statusCode === 401
-        ) {
-          throw new z.errors.RefreshAuthError();
-        }
-        throw new z.errors.Error(error.message, 'invalid_input', 400);
-      }
-    }
-  }
-
-  // Create assignee addon
   if (bundle.inputData.member_id != null) {
-    try {
-      const assigneeAddonResult = await client.mutate({
-        mutation: gql`
-          mutation ProjectNodesAssignmentUpdateMutation(
-            $input: ProjectNodesAssignmentUpdateInput!
-          ) {
-            projectNodesAssignmentUpdate(input: $input) {
-              clientMutationId
-              ok
-            }
-          }
-        `,
-        variables: {
-          input: {
-            clientMutationId: uuidv4(),
-            projectId: bundle.inputData.project_id,
-            nodeIds: [nodeImportData.nodeID],
-            assigneeId: bundle.inputData.member_id,
-          },
-        },
-      });
+    const createAssigneeResponse = await z.request({
+      url: `https://www.taskade.com/api/v1/projects/${bundle.inputData.project_id}/tasks/${taskId}/assignees`,
+      method: 'PUT',
+      headers: {
+        Accept: 'application/json',
+        'content-type': 'application/json',
+        authorization: `Bearer ${bundle.authData.access_token}`,
+      },
+      body: JSON.stringify({ handles: [bundle.inputData.member_id] }),
+    });
 
-      if (assigneeAddonResult.data.projectNodesAssignmentUpdate.ok) {
-        nodeImportData.node = {
-          ...nodeImportData.node,
-          assignees: [bundle.inputData.member_id],
-        };
-      }
-    } catch (error) {
-      if (error instanceof ApolloError) {
-        if (
-          error.networkError != null &&
-          'statusCode' in error.networkError &&
-          error.networkError.statusCode === 401
-        ) {
-          throw new z.errors.RefreshAuthError();
-        }
-        throw new z.errors.Error(error.message, 'invalid_input', 400);
-      }
+    const createAssigneeData: CreateAssigneeResponse = createAssigneeResponse.json;
+
+    if (!createAssigneeData.ok) {
+      throw new z.errors.Error(createAssigneeData.message, 'invalid_input', 400);
     }
   }
 
-  return nodeImportData;
+  return { taskId };
 };
 
 export default {
@@ -244,7 +206,6 @@ export default {
     label: 'Create Task',
     description: 'Creates a Task in Taskade',
     hidden: false,
-    important: true,
   },
   operation: {
     inputFields: [
@@ -313,47 +274,9 @@ export default {
       },
     ],
     sample: {
-      data: {
-        projectNodesImport: {
-          clientMutationId: 'fc9ea891-db68-4ad0-a8e0-f06afd7da3d7',
-          nodeID: '099630d4-267e-4b22-894b-08b69f3a4d79',
-          document: {
-            id: '77WDhinRapyT5FY8',
-            info: {
-              stats: {
-                cleared: false,
-                completed: false,
-                totalCount: 1,
-                completedCount: 0,
-              },
-              title: 'edittt patth',
-              updatedBy: { id: 1, handle: 'ycyc' },
-            },
-          },
-        },
-      },
+      taskId: '099630d4-267e-4b22-894b-08b69f3a4d79',
     },
-    outputFields: [
-      { key: 'clientMutationId' },
-      { key: 'nodeID' },
-      { key: 'document__id' },
-      { key: 'document__info__stats__cleared' },
-      { key: 'document__info__stats__completed' },
-      { key: 'document__info__stats__totalCount' },
-      {
-        key: 'document__info__stats__completedCount',
-      },
-      { key: 'document__info__title' },
-      { key: 'document__info__updatedBy__id' },
-      { key: 'document__info__updatedBy__handle' },
-      { key: 'node__start__date' },
-      { key: 'node__start__time' },
-      { key: 'node__start__timezone' },
-      { key: 'node__end__date' },
-      { key: 'node__end__time' },
-      { key: 'node__end__timezone' },
-      { key: 'node__assignees' },
-    ],
+    outputFields: [{ key: 'taskId' }],
     perform: perform,
   },
 };

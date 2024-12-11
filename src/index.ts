@@ -4,11 +4,11 @@ import { version as platformVersion } from 'zapier-platform-core';
 
 import { authentication } from './authentication';
 import CreateTask from './creates/createTask';
-import GetAllBlocks from './triggers/get_all_blocks';
-import GetAllProjects from './triggers/get_all_projects';
-import GetAllSpaces from './triggers/get_all_spaces';
 import GetAllAssignableMembers from './triggers/getAllAssignableMembers';
-import TaskDue from './triggers/task_due';
+import GetAllBlocks from './triggers/getAllBlocks';
+import GetAllProjects from './triggers/getAllProjects';
+import GetAllSpaces from './triggers/getAllSpaces';
+import TaskDue from './triggers/taskDue';
 
 const { version } = require('../package.json');
 
